@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/collect?edition=0800", "schedule": "0 23 * * 0-4" },
+    { "path": "/api/collect?edition=1400", "schedule": "0 5 * * 1-5"  }
+  ]
+}

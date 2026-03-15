@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# env files — 절대 커밋 금지
+.env
+.env.local
+.env.*.local
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
+
+# build artifacts
+tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
