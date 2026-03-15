@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import type { NewsArticleWithSimilar, Edition, Category } from '@/types'
+import type { DateWithEditions } from '@/lib/supabase/queries'
 import { Newspaper } from 'lucide-react'
-import DatePicker from '@/components/news/DatePicker'
-import EditionTabs from '@/components/news/EditionTabs'
+import DateSidebar from '@/components/news/DateSidebar'
 import CategoryFilter from '@/components/news/CategoryFilter'
 import NewsGrid from '@/components/news/NewsGrid'
 import LoadingSkeleton from '@/components/news/LoadingSkeleton'
@@ -15,20 +15,20 @@ interface Props {
   initialArticles: NewsArticleWithSimilar[]
   initialDate: string
   initialEdition: Edition | null
-  availableEditions: Edition[]
+  allDates: DateWithEditions[]
 }
 
 export default function DashboardClient({
   initialArticles,
   initialDate,
   initialEdition,
-  availableEditions: initialAvailableEditions,
+  allDates: initialAllDates,
 }: Props) {
   const [articles, setArticles] = useState<NewsArticleWithSimilar[]>(initialArticles)
   const [selectedDate, setSelectedDate] = useState<string>(initialDate)
   const [selectedEdition, setSelectedEdition] = useState<Edition | null>(initialEdition)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
-  const [availableEditions, setAvailableEditions] = useState<Edition[]>(initialAvailableEditions)
+  const [allDates, setAllDates] = useState<DateWithEditions[]>(initialAllDates)
   const [loading, setLoading] = useState(false)
   const [openArticle, setOpenArticle] = useState<NewsArticleWithSimilar | null>(null)
 
@@ -36,13 +36,17 @@ export default function DashboardClient({
     (a) => !selectedCategory || a.category === selectedCategory,
   )
 
-  async function fetchArticles(date: string, edition: Edition) {
+  async function handleSidebarSelect(date: string, edition: Edition) {
+    if (date === selectedDate && edition === selectedEdition) return
+    setSelectedDate(date)
+    setSelectedEdition(edition)
+    setSelectedCategory(null)
     setLoading(true)
     try {
       const res = await fetch(
         `/api/news?date=${encodeURIComponent(date)}&edition=${encodeURIComponent(edition)}`,
       )
-      if (!res.ok) throw new Error('Failed to fetch')
+      if (!res.ok) throw new Error('Failed')
       const json = await res.json()
       setArticles(json.articles ?? [])
     } catch {
@@ -52,64 +56,24 @@ export default function DashboardClient({
     }
   }
 
-  async function handleDateChange(date: string) {
-    setSelectedDate(date)
-    setSelectedCategory(null)
-
-    // Fetch available editions for this date
+  // 새 수집 후 사이드바 날짜 목록 갱신 (옵션)
+  async function refreshAllDates() {
     try {
-      const res = await fetch(`/api/news?date=${encodeURIComponent(date)}&edition=08:00`)
-      const res2 = await fetch(`/api/news?date=${encodeURIComponent(date)}&edition=14:00`)
-
-      const newEditions: Edition[] = []
+      const res = await fetch('/api/dates')
       if (res.ok) {
-        const j = await res.json()
-        if ((j.articles ?? []).length > 0) newEditions.push('08:00')
+        const json = await res.json()
+        setAllDates(json.dates ?? [])
       }
-      if (res2.ok) {
-        const j2 = await res2.json()
-        if ((j2.articles ?? []).length > 0) newEditions.push('14:00')
-      }
-
-      setAvailableEditions(newEditions)
-
-      const newDefaultEdition: Edition | null = newEditions.includes('14:00')
-        ? '14:00'
-        : newEditions.includes('08:00')
-        ? '08:00'
-        : null
-
-      setSelectedEdition(newDefaultEdition)
-
-      if (newDefaultEdition) {
-        const res = await fetch(
-          `/api/news?date=${encodeURIComponent(date)}&edition=${encodeURIComponent(newDefaultEdition)}`,
-        )
-        if (res.ok) {
-          const json = await res.json()
-          setArticles(json.articles ?? [])
-        } else {
-          setArticles([])
-        }
-      } else {
-        setArticles([])
-      }
-    } catch {
-      setArticles([])
-    } finally {
-      setLoading(false)
-    }
+    } catch { /* silent */ }
   }
+  void refreshAllDates  // suppress unused warning — called only when needed
 
-  async function handleEditionChange(edition: Edition) {
-    setSelectedEdition(edition)
-    setSelectedCategory(null)
-    await fetchArticles(selectedDate, edition)
-  }
+  // 선택 날짜의 에디션 레이블
+  const editionLabel = selectedEdition === '08:00' ? '오전 08:00' : selectedEdition === '14:00' ? '오후 14:00' : ''
 
   return (
     <div style={{ background: 'var(--ins-bg)', minHeight: '100vh', color: 'var(--ins-text)' }}>
-      {/* Header */}
+      {/* ── Header ───────────────────────────────────────────── */}
       <header
         style={{
           borderBottom: '1px solid var(--ins-border)',
@@ -121,67 +85,69 @@ export default function DashboardClient({
       >
         <div
           style={{
-            maxWidth: '1400px',
-            margin: '0 auto',
-            padding: '14px 24px',
+            maxWidth: '100%',
+            padding: '12px 24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            flexWrap: 'wrap',
+            gap: '12px',
           }}
         >
-          <div className="flex items-center gap-3">
-            <Newspaper size={22} style={{ color: 'var(--ins-primary)' }} />
-            <h1
+          <Newspaper size={20} style={{ color: 'var(--ins-primary)', flexShrink: 0 }} />
+          <h1
+            style={{
+              fontSize: '1rem',
+              fontWeight: 700,
+              color: 'var(--ins-text)',
+              letterSpacing: '-0.01em',
+              flexShrink: 0,
+            }}
+          >
+            보험 뉴스 대시보드
+          </h1>
+          {selectedDate && selectedEdition && (
+            <span
               style={{
-                fontSize: '1.125rem',
-                fontWeight: 700,
-                color: 'var(--ins-text)',
-                letterSpacing: '-0.01em',
+                fontSize: '0.8125rem',
+                color: 'var(--ins-text-muted)',
+                marginLeft: '4px',
               }}
             >
-              보험 뉴스 대시보드
-            </h1>
-          </div>
-          <DatePicker
-            selected={selectedDate}
-            onChange={(date) => {
-              setLoading(true)
-              handleDateChange(date)
-            }}
-          />
+              {selectedDate} · {editionLabel}
+            </span>
+          )}
         </div>
       </header>
 
-      {/* Main */}
-      <main style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Edition Tabs */}
-        <div style={{ padding: '16px 24px 0' }}>
-          <EditionTabs
-            editions={availableEditions}
-            selected={selectedEdition}
-            onChange={handleEditionChange}
-          />
-        </div>
-
-        {/* Category Filter */}
-        <CategoryFilter
-          selected={selectedCategory}
-          onChange={setSelectedCategory}
-          articles={articles}
+      {/* ── Body: sidebar + main ─────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {/* Left Sidebar */}
+        <DateSidebar
+          dates={allDates}
+          selectedDate={selectedDate}
+          selectedEdition={selectedEdition}
+          onSelect={handleSidebarSelect}
         />
 
-        {/* News Grid or Skeleton */}
-        {loading ? (
-          <LoadingSkeleton />
-        ) : (
-          <NewsGrid articles={filteredArticles} onCardClick={setOpenArticle} />
-        )}
+        {/* Main Content */}
+        <main style={{ flex: 1, minWidth: 0, maxWidth: '1200px' }}>
+          {/* Category Filter */}
+          <CategoryFilter
+            selected={selectedCategory}
+            onChange={setSelectedCategory}
+            articles={articles}
+          />
 
-        {/* Search Section */}
-        <SearchSection />
-      </main>
+          {/* News Grid or Skeleton */}
+          {loading ? (
+            <LoadingSkeleton />
+          ) : (
+            <NewsGrid articles={filteredArticles} onCardClick={setOpenArticle} />
+          )}
+
+          {/* Search Section */}
+          <SearchSection />
+        </main>
+      </div>
 
       {/* Article Side Panel */}
       <ArticlePanel article={openArticle} onClose={() => setOpenArticle(null)} />

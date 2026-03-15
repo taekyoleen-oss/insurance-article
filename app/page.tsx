@@ -1,5 +1,5 @@
 import { toKSTDateString } from '@/lib/utils/date-kst'
-import { getAvailableEditions, getEditionArticles } from '@/lib/supabase/queries'
+import { getEditionArticles, getAllDatesWithEditions } from '@/lib/supabase/queries'
 import type { Edition } from '@/types'
 import DashboardClient from '@/components/dashboard-client'
 
@@ -8,32 +8,27 @@ export const revalidate = 300
 export default async function HomePage() {
   const today = toKSTDateString()
 
-  let editions: Edition[] = []
-  try {
-    editions = await getAvailableEditions(today)
-  } catch {
-    editions = []
-  }
+  // 모든 날짜+에디션 목록 (사이드바용)
+  const allDates = await getAllDatesWithEditions().catch(() => [])
 
-  const defaultEdition: Edition | null = editions.includes('14:00')
-    ? '14:00'
-    : editions.includes('08:00')
-    ? '08:00'
+  // 기본 선택: 오늘 또는 가장 최근 날짜
+  const defaultDateEntry = allDates.find((d) => d.date === today) ?? allDates[0] ?? null
+  const defaultEdition: Edition | null = defaultDateEntry
+    ? (defaultDateEntry.editions.includes('14:00') ? '14:00' : defaultDateEntry.editions[0] ?? null)
     : null
+  const defaultDate = defaultDateEntry?.date ?? today
 
   const articles =
-    defaultEdition && editions.length > 0
-      ? await getEditionArticles(today, defaultEdition).catch(() => [])
+    defaultEdition
+      ? await getEditionArticles(defaultDate, defaultEdition).catch(() => [])
       : []
-
-  const availableEditions = editions.length > 0 ? editions : []
 
   return (
     <DashboardClient
       initialArticles={articles}
-      initialDate={today}
+      initialDate={defaultDate}
       initialEdition={defaultEdition}
-      availableEditions={availableEditions}
+      allDates={allDates}
     />
   )
 }
