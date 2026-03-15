@@ -8,7 +8,7 @@ const client = new Anthropic()
 
 // ── Zod 스키마 ──────────────────────────────────────────────
 
-const CATEGORIES = ['생명보험', '손해보험', '제도·규제', '상품', '기타'] as const
+const CATEGORIES = ['업계동향', '상품', '언더라이팅', '클레임', '정책', '기타'] as const
 
 const SummaryItemSchema = z.object({
   id: z.string(),
@@ -38,6 +38,7 @@ export interface ArticleInput {
   title: string
   source: string
   snippet: string
+  validatedCategory?: string   // 검증 단계에서 결정된 카테고리 (힌트로 전달)
 }
 
 // ── 폴백: 전체 기사를 단독 대표 기사로 처리 ─────────────────
@@ -49,14 +50,27 @@ export function fallbackClusters(articles: ArticleInput[]): ClusterItem[] {
 // ── 프롬프트 생성 ────────────────────────────────────────────
 
 function buildPrompt(articles: ArticleInput[]): string {
-  return `다음은 이번 에디션의 보험 뉴스 기사 목록입니다.
+  return `당신은 보험사 임직원을 위한 전문 뉴스 에디터입니다.
+아래 기사 목록은 이미 보험사 실무 관련성 검증을 통과한 기사들입니다.
 
-각 기사에 대해:
-1. **summary**: 글머리(•) 3개, 줄당 한국어 40~60자로 핵심 내용 요약
-2. **summary_short**: 글머리(•) 1~2줄 축약 (슬라이드 패널 유사 기사 표시용)
-3. **category**: 생명보험 / 손해보험 / 제도·규제 / 상품 / 기타 중 하나
+## 요약 원칙
+각 기사에 대해 보험사 실무자(언더라이터·상품팀·클레임팀·경영기획·리스크관리)가
+업무에 즉시 활용할 수 있도록 다음을 작성해 주세요:
 
-클러스터링 기준:
+1. **summary**: 글머리(•) 3줄, 줄당 한국어 40~60자
+   - 1줄: 핵심 사실 (무엇이 변했는가/결정되었는가)
+   - 2줄: 업무 영향 (보험사 실무에 어떤 영향이 있는가)
+   - 3줄: 시사점 또는 후속 동향 (향후 주목할 점)
+2. **summary_short**: 글머리(•) 1~2줄, 슬라이드 패널 유사 기사 표시용 축약
+3. **category**: 아래 6개 중 하나 (validatedCategory 힌트 참고, 더 적합하면 변경 가능)
+   - 업계동향: 산업 전반, 회사 경영, 시장 구조
+   - 상품: 보험 상품 출시·개정, 보장 내용
+   - 언더라이팅: 인수심사, 보험사기, 손해율
+   - 클레임: 보험금 청구·지급, 손해사정, 민원
+   - 정책: 감독 규정, 법령, IFRS17, K-ICS
+   - 기타: 위에 해당하지 않는 보험 관련 기사
+
+## 클러스터링 기준
 - 제목 + snippet 기준 주제 유사도 80% 이상이면 같은 클러스터
 - 동일 법령 개정, 동일 사건의 다른 매체 보도는 유사로 판단
 - 대표 기사 선정 우선순위: 신뢰도 높은 출처 > 정보량 > 입력 순서
@@ -93,7 +107,7 @@ export async function processArticles(articles: ArticleInput[]): Promise<HaikuOu
                     summary_short: { type: 'string' },
                     category: {
                       type: 'string',
-                      enum: ['생명보험', '손해보험', '제도·규제', '상품', '기타'],
+                      enum: ['업계동향', '상품', '언더라이팅', '클레임', '정책', '기타'],
                     },
                   },
                   required: ['id', 'summary', 'summary_short', 'category'],

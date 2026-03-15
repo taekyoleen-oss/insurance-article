@@ -9,7 +9,7 @@ interface Props {
   articles: NewsArticleWithSimilar[]
 }
 
-const CATEGORIES: Category[] = ['생명보험', '손해보험', '제도·규제', '상품', '기타']
+const CATEGORIES: Category[] = ['업계동향', '상품', '언더라이팅', '클레임', '정책', '기타']
 
 export default function CategoryFilter({ selected, onChange, articles }: Props) {
   const countFor = (cat: Category | null) => {

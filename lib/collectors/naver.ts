@@ -2,6 +2,7 @@
 // SKILL: .claude/skills/news-collector/SKILL.md 참조
 
 import { sanitize, truncateSnippet } from '@/lib/utils/snippet'
+import { SEARCH_KEYWORDS, type Category } from '@/lib/keywords'
 
 export interface NaverNewsRaw {
   title: string
@@ -18,6 +19,7 @@ export interface ParsedArticle {
   snippet: string
   source: string
   published_at: string  // ISO 8601
+  suggestedCategory: Category  // 키워드 그룹에서 추정한 초기 카테고리
 }
 
 // URL에서 출처명 추출
@@ -44,7 +46,7 @@ export function extractSource(url: string): string {
 }
 
 // 네이버 API 응답 → ParsedArticle 변환
-function parseItem(item: NaverNewsRaw): ParsedArticle {
+function parseItem(item: NaverNewsRaw, suggestedCategory: Category): ParsedArticle {
   const url = item.originallink?.trim() || item.link
   return {
     url,
@@ -53,6 +55,7 @@ function parseItem(item: NaverNewsRaw): ParsedArticle {
     snippet: truncateSnippet(item.description, 100),
     source: extractSource(url),
     published_at: new Date(item.pubDate).toISOString(),
+    suggestedCategory,
   }
 }
 
@@ -78,14 +81,17 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 }
 
 // 키워드 1개에 대해 네이버 뉴스 검색
-// displayCount: 평상시 10건, 월요일 08:00(주말 포함) 30건
-export async function fetchNaverNews(keyword: string, displayCount = 10): Promise<ParsedArticle[]> {
+export async function fetchNaverNews(
+  keyword: string,
+  suggestedCategory: Category,
+  displayCount = 10,
+): Promise<ParsedArticle[]> {
   const clientId = process.env.NAVER_CLIENT_ID!
   const clientSecret = process.env.NAVER_CLIENT_SECRET!
 
   const url = new URL('https://openapi.naver.com/v1/search/news.json')
   url.searchParams.set('query', keyword)
-  url.searchParams.set('display', String(Math.min(displayCount, 100))) // 네이버 API 최대 100
+  url.searchParams.set('display', String(Math.min(displayCount, 100)))
   url.searchParams.set('sort', 'date')
 
   const res = await fetchWithRetry(url.toString(), {
@@ -101,25 +107,21 @@ export async function fetchNaverNews(keyword: string, displayCount = 10): Promis
   }
 
   const json = await res.json()
-  return (json.items as NaverNewsRaw[]).map(parseItem)
+  return (json.items as NaverNewsRaw[]).map((item) => parseItem(item, suggestedCategory))
 }
 
-// 모든 키워드 수집 (순차 실행)
-// displayPerKeyword: 평상시 10건, 월요일 08:00 30건 (토·일 포함)
-export async function collectAllKeywords(displayPerKeyword = 10): Promise<ParsedArticle[]> {
-  const keywords = (process.env.COLLECT_KEYWORDS ?? '보험,보험료,보험상품,금감원 보험')
-    .split(',')
-    .map((k) => k.trim())
-    .filter(Boolean)
-
+// 모든 키워드 수집 (SEARCH_KEYWORDS 순차 실행)
+// displayMultiplier: 평상시 1, 월요일 08:00 3 (토·일 포함)
+export async function collectAllKeywords(displayMultiplier = 1): Promise<ParsedArticle[]> {
   const results: ParsedArticle[] = []
 
-  for (const keyword of keywords) {
-    const articles = await fetchNaverNews(keyword, displayPerKeyword)
+  for (const { keyword, category, display } of SEARCH_KEYWORDS) {
+    const count = Math.min(display * displayMultiplier, 100)
+    const articles = await fetchNaverNews(keyword, category, count)
     results.push(...articles)
   }
 
-  // URL 기준 중복 제거 (동일 키워드 중복 결과)
+  // URL 기준 중복 제거 (여러 키워드에서 동일 기사 중복 수집)
   const seen = new Set<string>()
   return results.filter((a) => {
     if (seen.has(a.url)) return false
