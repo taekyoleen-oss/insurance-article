@@ -39,7 +39,7 @@ function toEditionLabel(edition: Edition): string {
 
 export default function DateSidebar({ dates, selectedDate, selectedEdition, onSelect }: Props) {
   // 열려 있는 사이드바 여부
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // 월별 그룹핑 (최신순)
   const monthGroups: MonthGroup[] = useMemo(() => {

@@ -68,6 +68,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
     <Sheet open={!!article} onOpenChange={(open) => { if (!open) onClose() }}>
       <SheetContent
         side={isMobile ? 'bottom' : 'right'}
+        showCloseButton={false}
         className={isMobile ? 'max-h-[90vh] overflow-y-auto' : 'w-[480px] overflow-y-auto'}
         style={{
           background: 'var(--ins-surface)',
@@ -97,7 +98,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              fontSize: '0.875rem',
+              fontSize: '1rem',
             }}
           >
             <X size={18} /> 닫기
@@ -111,7 +112,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
               style={{
                 padding: '2px 8px',
                 borderRadius: '9999px',
-                fontSize: '0.75rem',
+                fontSize: '0.875rem',
                 fontWeight: 600,
                 background: catBg,
                 color: catColor,
@@ -120,17 +121,17 @@ export default function ArticlePanel({ article, onClose }: Props) {
               {cat}
             </span>
             {article.source && (
-              <span style={{ fontSize: '0.8125rem', color: 'var(--ins-text-muted)' }}>{article.source}</span>
+              <span style={{ fontSize: '0.9375rem', color: 'var(--ins-text-muted)' }}>{article.source}</span>
             )}
             {article.published_at && (
-              <span style={{ fontSize: '0.8125rem', color: 'var(--ins-text-muted)', marginLeft: 'auto' }}>
+              <span style={{ fontSize: '0.9375rem', color: 'var(--ins-text-muted)', marginLeft: 'auto' }}>
                 {formatPublishedAt(article.published_at)}
               </span>
             )}
           </div>
 
           {/* Title */}
-          <h2 style={{ fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.6, color: 'var(--ins-text)' }}>
+          <h2 style={{ fontSize: '1.1875rem', fontWeight: 700, lineHeight: 1.6, color: 'var(--ins-text)' }}>
             {article.title}
           </h2>
 
@@ -141,7 +142,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 hover:underline"
             style={{
-              fontSize: '0.875rem',
+              fontSize: '1rem',
               color: 'var(--ins-accent)',
               fontWeight: 500,
             }}
@@ -155,7 +156,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
           <div>
             <p
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.875rem',
                 fontWeight: 600,
                 color: 'var(--ins-text-muted)',
                 textTransform: 'uppercase',
@@ -171,7 +172,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
                   <li
                     key={i}
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '1rem',
                       color: 'var(--ins-text)',
                       lineHeight: 1.7,
                       paddingLeft: '16px',
@@ -195,13 +196,13 @@ export default function ArticlePanel({ article, onClose }: Props) {
             ) : (
               <div>
                 {article.snippet && (
-                  <p style={{ fontSize: '0.875rem', color: 'var(--ins-text)', lineHeight: 1.7 }}>
+                  <p style={{ fontSize: '1rem', color: 'var(--ins-text)', lineHeight: 1.7 }}>
                     {article.snippet}
                   </p>
                 )}
                 <p
                   style={{
-                    fontSize: '0.8125rem',
+                    fontSize: '0.9375rem',
                     color: 'var(--ins-text-muted)',
                     fontStyle: 'italic',
                     marginTop: '8px',
@@ -220,7 +221,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
               <div>
                 <p
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: '0.875rem',
                     fontWeight: 600,
                     color: 'var(--ins-text-muted)',
                     textTransform: 'uppercase',

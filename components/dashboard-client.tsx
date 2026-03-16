@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { NewsArticleWithSimilar, Edition, Category } from '@/types'
 import type { DateWithEditions } from '@/lib/supabase/queries'
-import { Newspaper } from 'lucide-react'
+import { Newspaper, Sun, Moon } from 'lucide-react'
 import DateSidebar from '@/components/news/DateSidebar'
 import CategoryFilter from '@/components/news/CategoryFilter'
 import NewsGrid from '@/components/news/NewsGrid'
 import LoadingSkeleton from '@/components/news/LoadingSkeleton'
 import ArticlePanel from '@/components/news/ArticlePanel'
 import SearchSection from '@/components/search/SearchSection'
+import VibeCodingLabBanner from '@/components/VibeCodingLabBanner'
 
 interface Props {
   initialArticles: NewsArticleWithSimilar[]
@@ -24,6 +25,22 @@ export default function DashboardClient({
   initialEdition,
   allDates: initialAllDates,
 }: Props) {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ins-theme') as 'dark' | 'light' | null
+    const initial = saved ?? 'dark'
+    setTheme(initial)
+    document.documentElement.setAttribute('data-theme', initial)
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    document.documentElement.setAttribute('data-theme', next)
+    localStorage.setItem('ins-theme', next)
+  }
+
   const [articles, setArticles] = useState<NewsArticleWithSimilar[]>(initialArticles)
   const [selectedDate, setSelectedDate] = useState<string>(initialDate)
   const [selectedEdition, setSelectedEdition] = useState<Edition | null>(initialEdition)
@@ -115,6 +132,33 @@ export default function DashboardClient({
               {selectedDate} · {editionLabel}
             </span>
           )}
+
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+            style={{
+              marginLeft: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              border: '1px solid var(--ins-border)',
+              background: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+              color: 'var(--ins-text-muted)',
+              cursor: 'pointer',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {theme === 'dark'
+              ? <><Sun size={14} style={{ color: '#F59E0B' }} /> 라이트</>
+              : <><Moon size={14} style={{ color: '#6366F1' }} /> 다크</>
+            }
+          </button>
         </div>
       </header>
 
@@ -146,6 +190,9 @@ export default function DashboardClient({
 
           {/* Search Section */}
           <SearchSection />
+
+          {/* Promo Footer */}
+          <VibeCodingLabBanner />
         </main>
       </div>
 
