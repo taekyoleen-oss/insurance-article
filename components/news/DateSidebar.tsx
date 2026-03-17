@@ -12,9 +12,9 @@ interface Props {
   onSelect: (date: string, edition: Edition) => void
 }
 
-interface MonthGroup {
+interface PastMonthGroup {
   monthKey: string    // '2026-03'
-  monthLabel: string  // '2026년 3월'
+  monthLabel: string  // 'Past 2026년 3월'
   dates: DateWithEditions[]
 }
 
@@ -37,34 +37,70 @@ function toEditionLabel(edition: Edition): string {
   return edition === '08:00' ? '오전 08:00' : '오후 14:00'
 }
 
-export default function DateSidebar({ dates, selectedDate, selectedEdition, onSelect }: Props) {
-  // 열려 있는 사이드바 여부
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+function getTodayKST(): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()).replace(/\. /g, '-').replace('.', '')
+}
 
-  // 월별 그룹핑 (최신순)
-  const monthGroups: MonthGroup[] = useMemo(() => {
-    const map = new Map<string, DateWithEditions[]>()
+function daysDiffFromToday(dateStr: string): number {
+  const today = getTodayKST()
+  const a = new Date(today + 'T00:00:00')
+  const b = new Date(dateStr + 'T00:00:00')
+  return Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+const RECENT_THRESHOLD_DAYS = 7
+
+export default function DateSidebar({ dates, selectedDate, selectedEdition, onSelect }: Props) {
+  // 사이드바 기본값: 열린 상태
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  // 최근 7일 / 그 이전으로 분리
+  const { recentDates, pastMonthGroups } = useMemo(() => {
+    const recent: DateWithEditions[] = []
+    const pastMap = new Map<string, DateWithEditions[]>()
+
     for (const d of dates) {
-      const key = d.date.slice(0, 7) // 'YYYY-MM'
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(d)
+      if (daysDiffFromToday(d.date) <= RECENT_THRESHOLD_DAYS) {
+        recent.push(d)
+      } else {
+        const key = d.date.slice(0, 7)
+        if (!pastMap.has(key)) pastMap.set(key, [])
+        pastMap.get(key)!.push(d)
+      }
     }
-    return Array.from(map.entries()).map(([key, ds]) => ({
+
+    const pastGroups: PastMonthGroup[] = Array.from(pastMap.entries()).map(([key, ds]) => ({
       monthKey: key,
-      monthLabel: toMonthLabel(ds[0].date),
+      monthLabel: `Past ${toMonthLabel(ds[0].date)}`,
       dates: ds,
     }))
+
+    return { recentDates: recent, pastMonthGroups: pastGroups }
   }, [dates])
 
-  // 기본으로 가장 최근 달만 열어둠
-  const [openMonths, setOpenMonths] = useState<Set<string>>(() => {
+  // 최근 날짜별 열림 상태 — 가장 최근 날짜만 기본으로 열림
+  const [openDates, setOpenDates] = useState<Set<string>>(() => {
     const s = new Set<string>()
-    if (monthGroups.length > 0) s.add(monthGroups[0].monthKey)
+    if (recentDates.length > 0) s.add(recentDates[0].date)
     return s
   })
 
-  function toggleMonth(key: string) {
-    setOpenMonths((prev) => {
+  // 과거 월 그룹 — 기본값 모두 닫힘
+  const [openPastMonths, setOpenPastMonths] = useState<Set<string>>(new Set())
+
+  function toggleDate(date: string) {
+    setOpenDates((prev) => {
+      const next = new Set(prev)
+      next.has(date) ? next.delete(date) : next.add(date)
+      return next
+    })
+  }
+
+  function togglePastMonth(key: string) {
+    setOpenPastMonths((prev) => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
@@ -112,7 +148,7 @@ export default function DateSidebar({ dates, selectedDate, selectedEdition, onSe
         borderRight: '1px solid var(--ins-border)',
         background: 'var(--ins-surface)',
         overflowY: 'auto',
-        height: 'calc(100vh - 53px)',  // 헤더 높이 제외
+        height: 'calc(100vh - 53px)',
         position: 'sticky',
         top: '53px',
         alignSelf: 'flex-start',
@@ -147,96 +183,158 @@ export default function DateSidebar({ dates, selectedDate, selectedEdition, onSe
         </button>
       </div>
 
-      {/* 월별 아코디언 */}
-      {monthGroups.length === 0 ? (
+      {dates.length === 0 ? (
         <p style={{ padding: '16px 12px', fontSize: '0.8rem', color: 'var(--ins-text-muted)' }}>
           에디션 없음
         </p>
       ) : (
-        monthGroups.map((group) => {
-          const isOpen = openMonths.has(group.monthKey)
-          return (
-            <div key={group.monthKey}>
-              {/* 월 헤더 (토글) */}
-              <button
-                onClick={() => toggleMonth(group.monthKey)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--ins-text)',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  textAlign: 'left',
-                }}
-              >
-                <span>{group.monthLabel}</span>
-                {isOpen
-                  ? <ChevronDown size={13} style={{ color: 'var(--ins-text-muted)' }} />
-                  : <ChevronRight size={13} style={{ color: 'var(--ins-text-muted)' }} />
-                }
-              </button>
+        <>
+          {/* ── 최근 7일 (날짜별 아코디언) ── */}
+          {recentDates.map((d) => {
+            const isDateOpen = openDates.has(d.date)
+            return (
+              <div key={d.date}>
+                <button
+                  onClick={() => toggleDate(d.date)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '7px 12px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--ins-text)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                  }}
+                >
+                  <span>{toDateLabel(d.date)}</span>
+                  {isDateOpen
+                    ? <ChevronDown size={13} style={{ color: 'var(--ins-text-muted)' }} />
+                    : <ChevronRight size={13} style={{ color: 'var(--ins-text-muted)' }} />
+                  }
+                </button>
 
-              {/* 날짜 + 에디션 목록 */}
-              {isOpen && (
-                <div style={{ paddingBottom: '4px' }}>
-                  {group.dates.map((d) => (
-                    <div key={d.date}>
-                      {/* 날짜 라벨 */}
-                      <div
-                        style={{
-                          padding: '3px 12px 2px 20px',
-                          fontSize: '0.75rem',
-                          color: 'var(--ins-text-muted)',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {toDateLabel(d.date)}
+                {isDateOpen && (
+                  <div style={{ paddingBottom: '4px' }}>
+                    {d.editions.map((edition) => {
+                      const isSelected = selectedDate === d.date && selectedEdition === edition
+                      return (
+                        <button
+                          key={edition}
+                          onClick={() => onSelect(d.date, edition)}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            padding: '5px 12px 5px 24px',
+                            background: isSelected ? 'rgba(245,158,11,0.12)' : 'none',
+                            border: 'none',
+                            borderLeft: isSelected ? '2px solid #F59E0B' : '2px solid transparent',
+                            cursor: 'pointer',
+                            color: isSelected ? '#F59E0B' : 'var(--ins-text-muted)',
+                            fontSize: '0.8rem',
+                            textAlign: 'left',
+                            fontWeight: isSelected ? 600 : 400,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {edition === '08:00' ? <Sun size={12} /> : <Moon size={12} />}
+                          {toEditionLabel(edition)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* ── 과거 월 그룹 (기본 닫힘) ── */}
+          {pastMonthGroups.map((group) => {
+            const isOpen = openPastMonths.has(group.monthKey)
+            return (
+              <div key={group.monthKey}>
+                <button
+                  onClick={() => togglePastMonth(group.monthKey)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    borderTop: '1px solid var(--ins-border)',
+                    cursor: 'pointer',
+                    color: 'var(--ins-text-muted)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  <span>{group.monthLabel}</span>
+                  {isOpen
+                    ? <ChevronDown size={12} style={{ color: 'var(--ins-text-muted)' }} />
+                    : <ChevronRight size={12} style={{ color: 'var(--ins-text-muted)' }} />
+                  }
+                </button>
+
+                {isOpen && (
+                  <div style={{ paddingBottom: '4px' }}>
+                    {group.dates.map((d) => (
+                      <div key={d.date}>
+                        <div
+                          style={{
+                            padding: '3px 12px 2px 20px',
+                            fontSize: '0.75rem',
+                            color: 'var(--ins-text-muted)',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {toDateLabel(d.date)}
+                        </div>
+                        {d.editions.map((edition) => {
+                          const isSelected = selectedDate === d.date && selectedEdition === edition
+                          return (
+                            <button
+                              key={edition}
+                              onClick={() => onSelect(d.date, edition)}
+                              style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '7px',
+                                padding: '5px 12px 5px 28px',
+                                background: isSelected ? 'rgba(245,158,11,0.12)' : 'none',
+                                border: 'none',
+                                borderLeft: isSelected ? '2px solid #F59E0B' : '2px solid transparent',
+                                cursor: 'pointer',
+                                color: isSelected ? '#F59E0B' : 'var(--ins-text-muted)',
+                                fontSize: '0.8rem',
+                                textAlign: 'left',
+                                fontWeight: isSelected ? 600 : 400,
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              {edition === '08:00' ? <Sun size={12} /> : <Moon size={12} />}
+                              {toEditionLabel(edition)}
+                            </button>
+                          )
+                        })}
                       </div>
-                      {/* 에디션 버튼들 */}
-                      {d.editions.map((edition) => {
-                        const isSelected = selectedDate === d.date && selectedEdition === edition
-                        return (
-                          <button
-                            key={edition}
-                            onClick={() => onSelect(d.date, edition)}
-                            style={{
-                              width: '100%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '7px',
-                              padding: '5px 12px 5px 28px',
-                              background: isSelected ? 'rgba(245,158,11,0.12)' : 'none',
-                              border: 'none',
-                              borderLeft: isSelected ? '2px solid #F59E0B' : '2px solid transparent',
-                              cursor: 'pointer',
-                              color: isSelected ? '#F59E0B' : 'var(--ins-text-muted)',
-                              fontSize: '0.8rem',
-                              textAlign: 'left',
-                              fontWeight: isSelected ? 600 : 400,
-                              transition: 'all 0.15s',
-                            }}
-                          >
-                            {edition === '08:00'
-                              ? <Sun size={12} />
-                              : <Moon size={12} />
-                            }
-                            {toEditionLabel(edition)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </>
       )}
     </aside>
   )
