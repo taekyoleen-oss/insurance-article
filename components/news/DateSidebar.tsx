@@ -54,8 +54,8 @@ function daysDiffFromToday(dateStr: string): number {
 const RECENT_THRESHOLD_DAYS = 7
 
 export default function DateSidebar({ dates, selectedDate, selectedEdition, onSelect }: Props) {
-  // 사이드바 기본값: 열린 상태
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // 사이드바 기본값: 닫힌 상태
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // 최근 7일 / 그 이전으로 분리
   const { recentDates, pastMonthGroups } = useMemo(() => {

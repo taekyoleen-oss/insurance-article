@@ -40,15 +40,6 @@ export async function GET(req: NextRequest) {
   const isTestMode = req.nextUrl.searchParams.get('test') === 'true'
   const editionDate = toKSTDateString()
 
-  // 테스트 모드는 2026-03-15 하루만 허용
-  const TEST_ALLOWED_DATE = '2026-03-15'
-  if (isTestMode && editionDate !== TEST_ALLOWED_DATE) {
-    return NextResponse.json(
-      { error: `Test mode only allowed on ${TEST_ALLOWED_DATE}` },
-      { status: 403 },
-    )
-  }
-
   if (!isTestMode && isKSTWeekend()) {
     console.log(`[collect] 주말 스킵 (${editionDate})`)
     return NextResponse.json({ skipped: true, reason: 'weekend', editionDate })

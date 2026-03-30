@@ -73,17 +73,13 @@ export default function DashboardClient({
     }
   }
 
-  // 새 수집 후 사이드바 날짜 목록 갱신 (옵션)
-  async function refreshAllDates() {
-    try {
-      const res = await fetch('/api/dates')
-      if (res.ok) {
-        const json = await res.json()
-        setAllDates(json.dates ?? [])
-      }
-    } catch { /* silent */ }
-  }
-  void refreshAllDates  // suppress unused warning — called only when needed
+  // 마운트 시 최신 날짜 목록으로 갱신
+  useEffect(() => {
+    fetch('/api/dates')
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => { if (json?.dates) setAllDates(json.dates) })
+      .catch(() => {})
+  }, [])
 
   // 선택 날짜의 에디션 레이블
   const editionLabel = selectedEdition === '08:00' ? '오전 08:00' : selectedEdition === '14:00' ? '오후 14:00' : ''
