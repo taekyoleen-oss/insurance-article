@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { ChevronDown, ChevronRight, Sun, Moon, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronDown, ChevronRight, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-react'
 import type { Edition } from '@/types'
 import type { DateWithEditions } from '@/lib/supabase/queries'
 
@@ -53,9 +53,31 @@ function daysDiffFromToday(dateStr: string): number {
 
 const RECENT_THRESHOLD_DAYS = 7
 
+type UpdateStatus = 'idle' | 'loading' | 'success' | 'error'
+
 export default function DateSidebar({ dates, selectedDate, selectedEdition, onSelect }: Props) {
   // 사이드바 기본값: 닫힌 상태
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
+  const [updateMessage, setUpdateMessage] = useState('')
+
+  async function handleManualUpdate() {
+    setUpdateStatus('loading')
+    setUpdateMessage('')
+    try {
+      const res = await fetch('/api/manual-collect', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? '업데이트 실패')
+      setUpdateStatus('success')
+      setUpdateMessage(data.message ?? `${data.inserted}건 업데이트됨`)
+      // 2초 후 페이지 새로고침으로 신규 기사 반영
+      setTimeout(() => window.location.reload(), 2000)
+    } catch (e) {
+      setUpdateStatus('error')
+      setUpdateMessage(e instanceof Error ? e.message : '오류가 발생했습니다')
+      setTimeout(() => setUpdateStatus('idle'), 3000)
+    }
+  }
 
   // 최근 7일 / 그 이전으로 분리
   const { recentDates, pastMonthGroups } = useMemo(() => {
@@ -167,21 +189,62 @@ export default function DateSidebar({ dates, selectedDate, selectedEdition, onSe
         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ins-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           에디션
         </span>
-        <button
-          onClick={() => setSidebarOpen(false)}
-          title="사이드바 닫기"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <button
+            onClick={handleManualUpdate}
+            disabled={updateStatus === 'loading'}
+            title="수동 업데이트"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: updateStatus === 'loading' ? 'not-allowed' : 'pointer',
+              color: updateStatus === 'success' ? 'var(--ins-primary)' : updateStatus === 'error' ? '#ef4444' : 'var(--ins-text-muted)',
+              padding: '2px',
+              borderRadius: '4px',
+              opacity: updateStatus === 'loading' ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <RefreshCw
+              size={13}
+              style={{
+                animation: updateStatus === 'loading' ? 'spin 1s linear infinite' : 'none',
+              }}
+            />
+          </button>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            title="사이드바 닫기"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--ins-text-muted)',
+              padding: '2px',
+              borderRadius: '4px',
+            }}
+          >
+            <PanelLeftClose size={15} />
+          </button>
+        </div>
+      </div>
+
+      {/* 업데이트 상태 메시지 */}
+      {updateStatus !== 'idle' && updateMessage && (
+        <div
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--ins-text-muted)',
-            padding: '2px',
-            borderRadius: '4px',
+            padding: '6px 12px',
+            fontSize: '0.72rem',
+            color: updateStatus === 'success' ? 'var(--ins-primary)' : updateStatus === 'error' ? '#ef4444' : 'var(--ins-text-muted)',
+            borderBottom: '1px solid var(--ins-border)',
+            lineHeight: 1.4,
           }}
         >
-          <PanelLeftClose size={15} />
-        </button>
-      </div>
+          {updateStatus === 'loading' ? '업데이트 중...' : updateMessage}
+          {updateStatus === 'success' && ' 새로고침 중...'}
+        </div>
+      )}
 
       {dates.length === 0 ? (
         <p style={{ padding: '16px 12px', fontSize: '0.8rem', color: 'var(--ins-text-muted)' }}>

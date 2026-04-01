@@ -3,6 +3,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
