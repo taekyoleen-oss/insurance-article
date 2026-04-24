@@ -60,15 +60,14 @@ const resolveUrl = (item: NaverNewsItem): string =>
 
 ## 4. 키워드 관리
 
-```typescript
-const keywords = (process.env.COLLECT_KEYWORDS ?? '보험,보험료,보험상품,금감원 보험')
-  .split(',')
-  .map(k => k.trim())
-  .filter(Boolean)
-```
+`lib/keywords.ts`의 `SEARCH_KEYWORDS` 배열로 관리. 카테고리별 키워드와 display 건수를 함께 정의.
 
-- 환경변수 `COLLECT_KEYWORDS`로 런타임 교체 가능
-- 키워드당 `display=10` → 최대 4개 키워드 × 10건 = 총 40건
+실무자 중심 핵심 키워드 (display 6~8건):
+- 상품: `보험 신상품`, `실손보험`, `보험료 조정`
+- 언더라이팅: `계약인수`, `보험 인수심사`, `보험 가입한도`, `보험사기`
+- 정책: `금융감독원 보험`
+
+총 18개 키워드 × 평균 6.6건 ≈ 최대 118건 수집 → 필터링 후 15건 이하로 저장
 
 ---
 
@@ -92,12 +91,15 @@ const keywords = (process.env.COLLECT_KEYWORDS ?? '보험,보험료,보험상품
    → 2차 실패: 2s 대기 재시도
    → 3차 실패: 해당 키워드 건너뜀, 계속 진행
 
-5. URL 중복 제거 (Supabase 배치 조회)
-   → 수집된 URL 목록을 한 번에 Supabase에 조회
-   → 이미 존재하는 URL 제외 → 신규 URL만 추출
+5. 4단계 중복 필터링 (lib/deduplicator.ts)
+   Step 1: 시간 윈도우 필터 (에디션 수집 기간 외 기사 제거)
+   Step 2: URL 중복 제거 (Supabase 배치 조회 — 이미 저장된 URL 제외)
+   Step 3: 전일 DB 기사 제목 유사도 필터 (임계값 0.60 — 이전 에디션 중복 제거)
+   Step 4: 배치 내 유사도 필터 (임계값 0.65 — 같은 에디션 내 키워드 간 중복 제거)
    → 신규 기사만 Haiku에 전달
 
-6. 신규 기사 Haiku 처리 (.claude/skills/ai-summarizer/SKILL.md 참조)
+6. Claude Haiku 관련성 검증 — 최대 MAX_ARTICLES(15)건만 통과
+   (.claude/skills/ai-summarizer/SKILL.md 참조)
 
 7. Supabase INSERT
    → ON CONFLICT (url) DO NOTHING

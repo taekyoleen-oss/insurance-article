@@ -17,7 +17,7 @@ import {
 } from '@/lib/utils/date-kst'
 import type { Edition } from '@/types'
 
-const MAX_ARTICLES = 20
+const MAX_ARTICLES = 15
 
 export async function GET(req: NextRequest) {
   // 1. Cron 인증 검증

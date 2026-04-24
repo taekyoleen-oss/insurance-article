@@ -1,7 +1,8 @@
-// 기사 중복 제거 — 3단계 필터링
+// 기사 중복 제거 — 4단계 필터링
 // 1. 시간 윈도우 필터 (에디션 기간 외 기사 제거)
 // 2. URL 중복 제거 (Supabase 배치 조회)
 // 3. 제목 유사도 필터 (최근 24시간 DB 기사와 비교)
+// 4. 배치 내 유사도 필터 (같은 수집 배치 내 기사 간 비교)
 
 import { createServerClient } from '@/lib/supabase/server'
 import type { ParsedArticle } from '@/lib/collectors/naver'
@@ -10,9 +11,11 @@ import type { CollectionWindow } from '@/lib/utils/date-kst'
 // ── 제목 유사도 (Bigram Dice Coefficient) ─────────────────
 // 한국어 뉴스 제목에 적합 — 공백 제거 후 2글자 단위 비교
 // 0.0 (완전 다름) ~ 1.0 (완전 동일)
-// 임계값: 0.65 이상이면 유사 기사로 판단
 
-const SIMILARITY_THRESHOLD = 0.65
+// DB 비교 임계값: 0.60 (이전 에디션 대비 중복 검출 강화)
+const DB_SIMILARITY_THRESHOLD = 0.60
+// 배치 내 임계값: 0.65 (같은 에디션 내 다른 키워드에서 수집된 동일 기사 제거)
+const BATCH_SIMILARITY_THRESHOLD = 0.65
 
 function bigramDice(a: string, b: string): number {
   const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase()
@@ -107,9 +110,9 @@ export async function filterNewArticles(
         (max, t) => Math.max(max, bigramDice(article.title, t)),
         0,
       )
-      if (maxSim >= SIMILARITY_THRESHOLD) {
+      if (maxSim >= DB_SIMILARITY_THRESHOLD) {
         console.log(
-          `[deduplicator] 유사 제목 제외 (${Math.round(maxSim * 100)}%): ${article.title.slice(0, 40)}`,
+          `[deduplicator] 전일 유사 제목 제외 (${Math.round(maxSim * 100)}%): ${article.title.slice(0, 40)}`,
         )
         return false
       }
@@ -119,6 +122,28 @@ export async function filterNewArticles(
     console.log(
       `[deduplicator] 유사도 필터 (DB ${recentArticles.length}건 비교): ${before}건 → ${filtered.length}건`,
     )
+  }
+
+  if (filtered.length === 0) return []
+
+  // ─ Step 4: 배치 내 유사도 필터 ──────────────────────────
+  // 같은 에디션 내 다른 키워드에서 수집된 동일 주제 기사 제거
+  {
+    const accepted: ParsedArticle[] = []
+    for (const article of filtered) {
+      const hasSimilar = accepted.some(
+        (prev) => bigramDice(article.title, prev.title) >= BATCH_SIMILARITY_THRESHOLD,
+      )
+      if (hasSimilar) {
+        console.log(`[deduplicator] 배치 내 중복 제외: ${article.title.slice(0, 40)}`)
+      } else {
+        accepted.push(article)
+      }
+    }
+    if (accepted.length < filtered.length) {
+      console.log(`[deduplicator] 배치 내 중복 제거: ${filtered.length}건 → ${accepted.length}건`)
+    }
+    filtered = accepted
   }
 
   return filtered
