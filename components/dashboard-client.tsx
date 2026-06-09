@@ -25,13 +25,19 @@ export default function DashboardClient({
   initialEdition,
   allDates: initialAllDates,
 }: Props) {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
 
   useEffect(() => {
+    // URL ?theme=light|dark 우선(임베드용) → 저장값 → 기본 light
+    const urlTheme = new URLSearchParams(window.location.search).get('theme')
     const saved = localStorage.getItem('ins-theme') as 'dark' | 'light' | null
-    const initial = saved ?? 'dark'
+    const initial: 'dark' | 'light' =
+      urlTheme === 'light' || urlTheme === 'dark' ? urlTheme : (saved ?? 'light')
     setTheme(initial)
     document.documentElement.setAttribute('data-theme', initial)
+    if (urlTheme === 'light' || urlTheme === 'dark') {
+      localStorage.setItem('ins-theme', initial)
+    }
   }, [])
 
   function toggleTheme() {
