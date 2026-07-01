@@ -21,11 +21,17 @@ interface ArticleInput {
   id: string       // UUID (DB에서 미리 INSERT 후 생성된 id)
   title: string    // sanitize 처리된 제목
   source: string   // 출처명
-  snippet: string  // sanitize 처리된 snippet
+  snippet: string  // sanitize 처리된 snippet (본문 수집 실패 시 폴백)
+  body?: string    // 원문에서 추출한 본문 (요약 재료 — lib/collectors/article-body.ts)
 }
 ```
 
 신규 기사 목록 (`ArticleInput[]`)을 JSON 직렬화하여 user 메시지로 전달.
+
+> **요약 충실도 핵심**: 네이버 snippet은 100자 내외로 짧아 이것만으로는 충실한 요약이 불가능하다.
+> 수집 시점에 `fetchArticleBody(url, naver_link)`로 실제 기사 본문을 추출해 `body`로 넘긴다.
+> 본문 수집 실패 시에만 `snippet`을 폴백으로 사용한다. 프롬프트는 **제공된 본문에 있는 사실만**으로
+> 요약하도록 지시하여(추측·과장 금지) 요약과 원문의 정합성을 보장한다.
 
 ---
 
@@ -134,26 +140,24 @@ export async function processArticles(articles: ArticleInput[]): Promise<HaikuOu
 
 ## 5. 시스템 프롬프트 / 사용자 프롬프트
 
-```typescript
-function buildPrompt(articles: ArticleInput[]): string {
-  return `다음은 이번 에디션의 보험 뉴스 기사 목록입니다.
+실제 프롬프트는 `lib/summarizer.ts`의 `buildPrompt`를 단일 소스로 사용한다. 핵심 지침:
 
-각 기사에 대해:
-1. **summary**: 글머리(•) 3개, 줄당 한국어 40~60자로 핵심 내용 요약
-2. **summary_short**: 글머리(•) 1~2줄 축약 (슬라이드 패널 유사 기사 표시용)
-3. **category**: 생명보험 / 손해보험 / 제도·규제 / 상품 / 기타 중 하나
+- 모델에 넘기는 각 항목은 `{ id, title, source, 본문, validatedCategory }` 형태이며,
+  `본문`은 `body ?? snippet` (원문 본문 우선, 실패 시 snippet 폴백).
+- **요약 원칙(최우선)**: 제공된 `본문`·`title`에 실제로 있는 사실만으로 요약. 추측·추가·과장 금지.
+  본문의 구체적 사실(수치·기관명·제도명·시점·인용·대상)을 최대한 살려 충실하게 작성.
+- **summary 형식**: 글머리(•) 3~5줄, 줄당 45~90자. 정보가 풍부하면 4~5줄, 적으면 3줄
+  (억지로 채우지 않음). 권장 흐름: ① 핵심 사실 ② 세부 내용 ③ 배경·원인 ④ 영향·시사점
+  (각 항목은 본문에 근거가 있을 때만 작성).
+- **summary_short**: 글머리(•) 1~2줄 축약 (유사 기사 표시용).
+- **category**: 업계동향 / 상품 / 언더라이팅 / 클레임 / 정책 / 기타 (validatedCategory 힌트 참고).
 
 클러스터링 기준:
-- 제목 + snippet 기준 주제 유사도 80% 이상이면 같은 클러스터
+- 제목 + 본문 기준 주제 유사도 80% 이상이면 같은 클러스터
 - 동일 법령 개정, 동일 사건의 다른 매체 보도는 유사로 판단
 - 대표 기사 선정 우선순위: 신뢰도 높은 출처 > 정보량 > 입력 순서
 - 모든 기사는 반드시 하나의 클러스터에 속해야 함 (similar_ids=[] 허용)
 - similar_ids는 최대 2개
-
-기사 목록:
-${JSON.stringify(articles, null, 2)}`
-}
-```
 
 ---
 

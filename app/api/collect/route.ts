@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { collectAllKeywords } from '@/lib/collectors/naver'
+import { fetchArticleBody } from '@/lib/collectors/article-body'
 import { filterNewArticles } from '@/lib/deduplicator'
 import { validateArticles } from '@/lib/validators/claude-validator'
 import { processArticles, fallbackClusters } from '@/lib/summarizer'
@@ -120,7 +121,18 @@ export async function GET(req: NextRequest) {
       source: a.source,
       snippet: a.snippet,
       validatedCategory: a.validatedCategory,
+      body: undefined as string | undefined,
     }))
+
+    // Step 5-1: 원문 본문 병렬 수집 (실패 시 snippet 폴백) — 요약 충실도 향상
+    // validated와 articleInputs는 동일 순서
+    const bodies = await Promise.all(
+      validated.map((a) => fetchArticleBody(a.url, a.naver_link)),
+    )
+    articleInputs.forEach((input, i) => {
+      if (bodies[i]) input.body = bodies[i]!
+    })
+    console.log(`[collect] 본문 수집: ${bodies.filter(Boolean).length}/${validated.length}건 성공`)
 
     const haikuResult = await processArticles(articleInputs)
     console.log(`[collect] Haiku 결과: summaries=${haikuResult?.summaries.length ?? 'null'}, clusters=${haikuResult?.clusters.length ?? 'null'}`)

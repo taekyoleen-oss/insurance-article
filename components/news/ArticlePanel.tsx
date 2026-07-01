@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Separator } from '@/components/ui/separator'
 import { ExternalLink, X } from 'lucide-react'
@@ -55,6 +55,32 @@ function parseBullets(summary: string): string[] {
 export default function ArticlePanel({ article, onClose }: Props) {
   const width = useWindowSize()
   const isMobile = width > 0 && width < 640
+  const isOpen = !!article
+
+  // onClose를 ref로 고정 — 부모가 인라인 함수를 넘겨 아래 effect가 재실행되는 것 방지
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
+  // 패널이 열리면 히스토리 항목을 push → 뒤로가기(popstate) 시 앱 종료 대신 패널만 닫힘
+  useEffect(() => {
+    if (!isOpen) return
+    window.history.pushState({ insArticlePanel: true }, '')
+    const handlePop = () => onCloseRef.current()
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [isOpen])
+
+  // 닫기 버튼·오버레이로 닫을 때: push한 히스토리 항목이 있으면 back()으로 정리
+  // → popstate 발생 → onClose 호출. 히스토리에 유령 항목이 남지 않도록 함
+  const handleUiClose = () => {
+    if (typeof window !== 'undefined' && window.history.state?.insArticlePanel) {
+      window.history.back()
+    } else {
+      onClose()
+    }
+  }
 
   if (!article) return null
 
@@ -65,7 +91,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
   const bullets = article.summary ? parseBullets(article.summary) : []
 
   return (
-    <Sheet open={!!article} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Sheet open={!!article} onOpenChange={(open) => { if (!open) handleUiClose() }}>
       <SheetContent
         side={isMobile ? 'bottom' : 'right'}
         showCloseButton={false}
@@ -87,7 +113,7 @@ export default function ArticlePanel({ article, onClose }: Props) {
           }}
         >
           <button
-            onClick={onClose}
+            onClick={handleUiClose}
             style={{
               background: 'transparent',
               border: 'none',
